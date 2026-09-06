@@ -20,7 +20,8 @@ dbt build
 
 - `dundersign_dbt` owns the raw and analytics schemas and runs dbt.
 - `dundersign_ro` is read-only over `analytics*`, for BI tools and dashboards.
-  `grant_readonly.sql` (run as `dundersign_dbt`) sets that up after a build.
+  Its grants are managed with the database itself (terraform), including
+  default privileges, so a rebuild needs no grant step.
 
 ## Loading the raw schemas
 

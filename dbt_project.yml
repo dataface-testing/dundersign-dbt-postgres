@@ -53,7 +53,9 @@ models:
 vars:
   # The Zendesk export has no schedule, tag, organization, brand or form tables;
   # the package would stub them with integer ids that don't join to the text
-  # ticket/user ids.
+  # ticket/user ids. Only the external Postgres build feels these: regenerate.py
+  # and the BigQuery publish select +package:dundersign, which never reaches the
+  # models they gate.
   using_schedules: false
   using_user_tags: false
   using_organizations: false
