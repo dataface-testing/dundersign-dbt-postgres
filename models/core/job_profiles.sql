@@ -10,6 +10,7 @@ select
     is_inactive,
     is_critical_job,
     difficulty_to_fill,
-    substr(summary, strpos(summary, ' in ') + 4) as department,
+    case when strpos(summary, ' in ') > 0
+        then substr(summary, strpos(summary, ' in ') + 4) end as department,
     _fivetran_synced
 from {{ ref('stg_workday__job_profile') }}
