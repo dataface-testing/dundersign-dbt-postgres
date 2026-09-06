@@ -1,5 +1,5 @@
 title: "Dundersign — Company Overview"
-notes: "Executive rollup of growth, product usage and revenue, built on the analytics_serving pre-aggregated models."
+notes: "Executive rollup of growth, product usage and revenue, built on the analytics_serving pre-aggregated models (re-render probe)."
 
 variables:
   trailing_days:
