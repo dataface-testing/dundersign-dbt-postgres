@@ -1,0 +1,13 @@
+dundersign:
+  target: prod
+  outputs:
+    prod:
+      type: postgres
+      host: "{{ env_var('DUNDERSIGN_PG_HOST') }}"
+      port: 5432
+      user: "{{ env_var('DUNDERSIGN_PG_USER', 'dundersign_dbt') }}"
+      password: "{{ env_var('DUNDERSIGN_PG_PASSWORD') }}"
+      dbname: dundersign
+      schema: analytics
+      sslmode: require
+      threads: 4

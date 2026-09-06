@@ -1,0 +1,171 @@
+version: 2
+
+models:
+  - name: candidates
+    description: >
+      Greenhouse recruiting candidates. recruiter_employee_id and
+      coordinator_employee_id resolve through employees.greenhouse_user_id --
+      null where the greenhouse.user has no matching Workday employee (see
+      employees.sql).
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: recruiter_employee_id
+        description: >
+          FK to employees.id, via employees.greenhouse_user_id -- an
+          email join on greenhouse.user.primary_email_address
+          (greenhouse.user.employee_id is unpopulated in this fixture).
+        # not_null is the load-bearing half. `relationships` skips NULLs by
+        # construction, so it stays green if the bridge resolves nothing --
+        # which is exactly what happened when the recruiter was seeded as a
+        # day-365 hire and a 350-day run never hired him. This fires at
+        # regeneration time, the moment the invariant can actually break.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('employees')
+                field: id
+      - name: coordinator_employee_id
+        description: >
+          FK to employees.id, via employees.greenhouse_user_id -- an
+          email join on greenhouse.user.primary_email_address
+          (greenhouse.user.employee_id is unpopulated in this fixture).
+        tests:
+          - relationships:
+              arguments:
+                to: ref('employees')
+                field: id
+
+  - name: applications
+    description: Greenhouse applications -- one row per candidate application to a job.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: candidate_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('candidates')
+                field: id
+      - name: current_stage_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('job_stages')
+                field: id
+      - name: prospect_stage_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('job_stages')
+                field: id
+      - name: source_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('recruiting_sources')
+                field: id
+      - name: credited_to_employee_id
+        description: >
+          FK to employees.id, via employees.greenhouse_user_id -- an
+          email join on greenhouse.user.primary_email_address
+          (greenhouse.user.employee_id is unpopulated in this fixture).
+        tests:
+          - relationships:
+              arguments:
+                to: ref('employees')
+                field: id
+      - name: prospect_owner_employee_id
+        description: >
+          FK to employees.id, via employees.greenhouse_user_id -- an
+          email join on greenhouse.user.primary_email_address
+          (greenhouse.user.employee_id is unpopulated in this fixture).
+        tests:
+          - relationships:
+              arguments:
+                to: ref('employees')
+                field: id
+
+  - name: application_stages
+    description: >
+      Application x stage transition history. id is a synthetic surrogate
+      (application_id + transition sequence) -- the raw feed carries no id.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: application_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('applications')
+                field: id
+      - name: new_stage_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('job_stages')
+                field: id
+
+  - name: jobs
+    description: Greenhouse job requisitions.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+
+  - name: job_stages
+    description: One row per stage in a job's pipeline.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: job_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('jobs')
+                field: id
+
+  - name: job_departments
+    description: >
+      Bridge between jobs and departments (a job can span more than one
+      department). id is a synthetic surrogate (department_id + job_id) --
+      the raw feed carries no id.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: department_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('departments')
+                field: id
+      - name: job_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('jobs')
+                field: id
+
+  - name: departments
+    description: Greenhouse departments.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: parent_id
+        description: Self-referencing FK; null for top-level departments.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('departments')
+                field: id
+
+  - name: recruiting_sources
+    description: Greenhouse candidate sources (referral, job board, etc).
+    columns:
+      - name: id
+        tests: [unique, not_null]

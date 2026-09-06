@@ -1,0 +1,12 @@
+# Fivetran source-staging packages, used where their column expectations match
+# what faketran emits. We try them at the staging layer; gaps fall back to
+# hand-rolled `stg_*` models in models/staging/.
+packages:
+  - package: fivetran/salesforce
+    version: [">=1.0.0", "<2.0.0"]
+  - package: fivetran/stripe
+    version: [">=0.10.0", "<1.0.0"]
+  - package: fivetran/zendesk
+    version: [">=0.18.0", "<1.0.0"]
+  - package: fivetran/hubspot
+    version: [">=0.13.0", "<1.0.0"]

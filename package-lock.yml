@@ -1,0 +1,35 @@
+packages:
+  - name: salesforce
+    package: fivetran/salesforce
+    version: 1.3.0
+  - name: stripe
+    package: fivetran/stripe
+    version: 0.19.2
+  - name: zendesk
+    package: fivetran/zendesk
+    version: 0.25.0
+  - name: hubspot
+    package: fivetran/hubspot
+    version: 0.26.0
+  - name: salesforce_source
+    package: fivetran/salesforce_source
+    version: 1.2.0
+  - name: stripe_source
+    package: fivetran/stripe_source
+    version: 0.15.1
+  - name: zendesk_source
+    package: fivetran/zendesk_source
+    version: 0.18.2
+  - name: hubspot_source
+    package: fivetran/hubspot_source
+    version: 0.21.0
+  - name: fivetran_utils
+    package: fivetran/fivetran_utils
+    version: 0.4.11
+  - name: spark_utils
+    package: dbt-labs/spark_utils
+    version: 0.3.3
+  - name: dbt_utils
+    package: dbt-labs/dbt_utils
+    version: 1.3.3
+sha1_hash: ab180e4a8eb532bcfd06ba0d220897b9f1968d8a

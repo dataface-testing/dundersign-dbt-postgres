@@ -1,0 +1,142 @@
+version: 2
+
+models:
+  - name: leads
+    description: >
+      Conformed Salesforce leads. person_id is null for a large share of rows
+      because salesforce.lead.email is corrupted (null/''/'invalid') for that
+      share of the fixture -- a deliberate generator anomaly, not dropped or
+      force-matched here.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: person_id
+        description: FK to persons.id, resolved from lower(trim(email)); null when email is missing/blank/'invalid'.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('persons')
+                field: id
+      - name: owner_id
+        description: FK to employees.id, resolved via employees.salesforce_user_id.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('employees')
+                field: id
+
+  - name: sales_contacts
+    description: >
+      Conformed Salesforce contacts. Unlike leads, contact email is clean, so
+      person_id resolves for effectively every row.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: person_id
+        description: FK to persons.id, resolved from lower(trim(email)).
+        tests:
+          - relationships:
+              arguments:
+                to: ref('persons')
+                field: id
+      - name: account_id
+        description: FK to accounts.id -- same id space as raw salesforce.account.id, no translation needed.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('accounts')
+                field: id
+      - name: owner_id
+        description: FK to employees.id, resolved via employees.salesforce_user_id.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('employees')
+                field: id
+
+  - name: opportunity_line_items
+    description: Conformed Salesforce opportunity line items. Thin in this fixture (1 row).
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: opportunity_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('opportunities')
+                field: id
+      - name: product_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('products')
+                field: id
+
+  - name: orders
+    description: Conformed Salesforce orders. Thin in this fixture (1 row).
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: account_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('accounts')
+                field: id
+      - name: opportunity_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('opportunities')
+                field: id
+      - name: owner_id
+        description: >
+          FK to employees.id, resolved via employees.salesforce_user_id --
+          the raw salesforce.order.owner_id is blank on every row in this
+          fixture, so owner_id never resolves here.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('employees')
+                field: id
+
+  - name: products
+    description: >
+      Conformed products, unioned across salesforce.product_2 and
+      netsuite.item with a source_system discriminator. The two systems'
+      single rows describe different real-world things (a sellable SKU vs. a
+      generic GL revenue item) -- see the model header -- so they are not
+      collapsed the way vendors/gl_accounts are.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: source_system
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["salesforce", "netsuite"]
+
+  - name: sales_activities
+    description: >
+      Conformed Salesforce tasks + events, unioned with an activity_type
+      discriminator. who_id/what_id/account_id are carried through as raw,
+      untested polymorphic ids (all blank in this fixture) -- see the model
+      header for why no relationships test is declared on them.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: activity_type
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["task", "event"]
+      - name: owner_id
+        description: >
+          FK to employees.id, resolved via employees.salesforce_user_id --
+          the raw salesforce.task/event owner_id is blank on every row in
+          this fixture, so owner_id never resolves here.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('employees')
+                field: id

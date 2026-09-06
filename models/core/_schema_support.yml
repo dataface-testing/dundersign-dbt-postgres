@@ -1,0 +1,68 @@
+version: 2
+
+# zendesk_source declares the `zendesk` source but its `tables:` list omits
+# satisfaction_rating (no staging model ships for it in the package -- see
+# stg_zendesk__satisfaction_rating.sql). Extend the same source name here so
+# our hand-rolled staging model can reference it via source().
+sources:
+  - name: zendesk
+    schema: "{{ var('zendesk_schema', 'zendesk') }}"
+    tables:
+      - name: satisfaction_rating
+
+models:
+  - name: ticket_comments
+    description: >
+      Ticket comment thread, one row per zendesk.ticket_comment. person_id
+      resolves the requester side by stripping the "zd_" prefix zendesk
+      bakes into user_id and matching persons.product_user_id -- zendesk.user
+      in this fixture holds only support agents, never end users, so
+      there is no zendesk.user row to join against. A meaningful share of
+      rows have a blank user_id (comments "by the agent" fall back to
+      ticket.assignee_id, which the generator never populates) and so
+      resolve to a null person_id -- a fixture limitation, not a join bug.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: ticket_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('tickets')
+                field: id
+      - name: person_id
+        description: Nullable -- see model description for the blank-user_id fixture gap.
+
+  - name: ticket_events
+    description: >
+      Ticket field-history events (status/priority transitions), one row per
+      zendesk.ticket_field_history. field_name is not fully degenerate in
+      this fixture (status, priority) so it is kept rather than dropped. No
+      actor FK: user_id on the raw table is 100% blank here.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: ticket_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('tickets')
+                field: id
+
+  - name: satisfaction_ratings
+    description: >
+      CSAT ratings, one row per zendesk.satisfaction_rating. person_id
+      resolves the same "zd_"-prefix-strip way as ticket_comments.person_id.
+      assignee_id, group_id, and reason are dropped -- 100% blank in this
+      fixture.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: ticket_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('tickets')
+                field: id
+      - name: person_id
+        description: Nullable in principle, but every requester_id in this fixture resolves.

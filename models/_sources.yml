@@ -1,0 +1,83 @@
+version: 2
+
+# Raw faketran-emitted source schemas. The Fivetran quickstart packages
+# (salesforce_source, stripe_source, zendesk_source, hubspot_source) declare
+# their own sources internally. This file declares product_db (Dundersign's
+# internal app database — no Fivetran package covers it) so our hand-rolled
+# staging models can reference it via {{ source('product_db', '...') }}.
+sources:
+  - name: product_db
+    description: Dundersign's internal application database (signups, documents, signing events).
+    schema: "{{ var('product_db_schema') }}"
+    tables:
+      - name: user
+        description: Product user (signup).
+      - name: team
+        description: Team / workspace for multi-user accounts.
+      - name: document
+        description: Document created for signing.
+      - name: document_recipient
+        description: Recipient / signer on a document (bridge to user via email match).
+      - name: signature
+        description: Individual signature placed on a document.
+      - name: session
+        description: User login session.
+      - name: template
+        description: Reusable document template.
+      - name: audit_log
+        description: Audit trail for compliance (SOC2/HIPAA).
+
+  - name: workday
+    description: Workday HR — normalized employee/position schema.
+    schema: "{{ var('workday_schema') }}"
+    tables:
+      - name: worker_history
+      - name: person_name
+      - name: person_contact_email_address
+      - name: position
+      - name: worker_position_history
+      - name: job_profile
+
+  - name: greenhouse
+    description: Greenhouse recruiting — no Fivetran dbt source package installed, so hand-rolled staging reads these directly.
+    schema: "{{ var('greenhouse_schema') }}"
+    tables:
+      - name: candidate
+      - name: application
+      - name: application_history
+      - name: job
+      - name: job_stage
+      - name: job_department
+      - name: department
+      - name: source
+      - name: user
+
+  - name: netsuite
+    description: NetSuite GL (system of record from MIGRATION_DAY on) — no Fivetran dbt source package installed.
+    schema: "{{ var('netsuite_schema') }}"
+    tables:
+      - name: account
+      - name: transaction
+      - name: transaction_line
+      - name: transaction_accounting_line
+      - name: accounting_period
+      - name: vendor
+      - name: customer
+      - name: item
+      - name: subsidiary
+
+  - name: quickbooks
+    description: QuickBooks GL (system of record before MIGRATION_DAY) — no Fivetran dbt source package installed.
+    schema: "{{ var('quickbooks_schema') }}"
+    tables:
+      - name: account
+      - name: invoice
+      - name: invoice_line
+      - name: bill
+      - name: bill_line
+      - name: payment
+      - name: bill_payment
+      - name: journal_entry
+      - name: journal_entry_line
+      - name: vendor
+      - name: customer

@@ -1,0 +1,98 @@
+version: 2
+
+models:
+  - name: gl_accounts
+    description: >
+      Conformed chart of accounts. NetSuite and QuickBooks carry the same
+      7-account chart under identical names, so this collapses to one row
+      per account rather than a source_system-tagged union (contrast with
+      gl_transactions, which cannot collapse -- see that model's header).
+    columns:
+      - name: id
+        description: Account name -- the conformance key (both ledgers use identical names).
+        tests: [unique, not_null]
+
+  - name: vendors
+    description: Conformed vendor list. Same collapse rationale as gl_accounts (3 shared vendors).
+    columns:
+      - name: id
+        tests: [unique, not_null]
+
+  - name: accounting_periods
+    description: NetSuite accounting periods. QuickBooks has no equivalent construct in this fixture.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+
+  - name: gl_transactions
+    description: >
+      GL transaction headers, unioned across NetSuite and QuickBooks with a
+      source_system discriminator. Each transaction is a disjoint economic
+      event (an invoice/bill/payment/journal entry posts to exactly one
+      ledger), so there is no double-counting across the MIGRATION_DAY
+      cutover -- verified by row-count reconciliation against the raw
+      tables, not assumed.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: source_system
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["netsuite", "quickbooks"]
+      - name: account_id
+        description: FK to accounts.id, populated for customer-side transactions (invoices, customer payments).
+        tests:
+          - relationships:
+              arguments:
+                to: ref('accounts')
+                field: id
+      - name: vendor_id
+        description: FK to vendors.id, populated for vendor-side transactions (bills, bill payments).
+        tests:
+          - relationships:
+              arguments:
+                to: ref('vendors')
+                field: id
+      - name: accounting_period_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('accounting_periods')
+                field: id
+
+  - name: gl_transaction_lines
+    description: >
+      GL transaction line detail, unioned across both ledgers with the same
+      source_system discriminator as gl_transactions. Amounts normalized to
+      dollars (NetSuite's raw feed is cents) and to one signed convention
+      (debit-positive / credit-negative, matching NetSuite's native
+      transaction_accounting_line) -- see the model header for why that
+      matters for QuickBooks, whose raw amount is unsigned. debit/credit are
+      always 0.0 (never NULL) on the side that doesn't apply, on both
+      ledgers.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: transaction_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('gl_transactions')
+                field: id
+      - name: gl_account_id
+        description: >
+          FK to gl_accounts.id, resolved on every line in both ledgers (the
+          faketran QuickBooks generator now posts an explicit account on
+          every invoice/bill line -- see
+          stg_quickbooks__invoice_line.sql/stg_quickbooks__bill_line.sql).
+          assert_gl_transaction_lines_fk_resolution.sql is the build-time
+          guard that catches a regression here per ledger, since a
+          `relationships` test alone would silently skip any that went
+          NULL again.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('gl_accounts')
+                field: id

@@ -1,0 +1,103 @@
+version: 2
+
+models:
+  - name: persons
+    description: >
+      Nimble conformance spine. One row per distinct human, keyed on
+      lowercased email, unioning every person-shaped source: product_db.user,
+      hubspot.contact, salesforce.contact, and stripe.customer. A person is
+      here because some system holds a record of them -- not because
+      marketing minted a contact. Junk/bot signups are kept and flagged
+      (is_junk_signup), never dropped, so counts reconcile against the
+      product database. salesforce.leads is NOT unioned here -- see
+      leads.person_id (a many-to-one FK) in the sales domain.
+    columns:
+      - name: id
+        description: Lowercased email. The conformance key for the whole spine.
+        tests: [unique, not_null]
+      - name: product_user_id
+        description: FK to users.id (product_db signup), null if this person never signed up.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('users')
+                field: id
+      - name: salesforce_contact_id
+        description: FK to the raw salesforce.contact id, null if this person never became a CRM contact.
+      - name: hubspot_contact_id
+        description: >
+          Natural id from hubspot.contact, null when marketing never minted a
+          contact for this person -- bot signups are the usual case. Not
+          not_null: HubSpot is one leg of the union, not the base relation.
+      - name: is_junk_signup
+        description: >
+          product_db's own signup-fraud verdict, carried through rather than
+          re-derived from the email domain. Analysts filter on this; the row
+          is never silently absent.
+        tests: [not_null]
+      - name: product_signup_at
+        description: >
+          When this person signed up for the product, NULL if they never did.
+          Distinct from created_at (first seen in any system) -- cohorting on
+          created_at would let a HubSpot contact date decide the bucket.
+      - name: email_verified
+        description: >
+          Whether the product signup ever verified its address. NULL for
+          anyone with no product signup -- false would claim verification
+          was attempted and failed. Nullable by design, so no not_null test.
+      - name: has_marketing_contact
+        description: >
+          Whether HubSpot holds a contact for this person. Coverage is a
+          business question, measured here and in
+          marketing_person_coverage -- it is deliberately not a build gate.
+        tests: [not_null]
+      - name: primary_stripe_customer_id
+        description: >
+          FK to ONE raw stripe.customer id -- the earliest, when a person has
+          more than one (some people in this fixture do: resubscribes mint a
+          new Stripe customer per event, not per person). Null if this
+          person never became a paying customer. Do NOT use this column to
+          resolve a specific invoice/charge back to a person -- join
+          stg_stripe__customer's own email to persons.id instead (see
+          invoices.sql), since a scalar column here cannot represent all of
+          a person's Stripe customers.
+
+  - name: accounts
+    description: >
+      Nimble conformance spine. One row per company, keyed on
+      salesforce.account (minted once per company name by the generator).
+      netsuite/quickbooks customer records are many-to-one onto an account
+      and are resolved at query time by downstream models (see
+      gl_transactions.sql) rather than embedded here.
+    columns:
+      - name: id
+        description: salesforce.account id.
+        tests: [unique, not_null]
+      - name: name
+        tests: [not_null]
+      - name: employee_id
+        description: FK to employees.id, the salesforce rep who owns this account.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('employees')
+                field: id
+
+  - name: employees
+    description: >
+      Nimble conformance spine (extends the old `workers` entity). One row
+      per Workday worker, extended with the per-system ids every other
+      domain FKs into (sales rep, support agent, recruiter, marketing
+      owner). Joined by the shared @dundersign.com work-email namespace,
+      greenhouse.user included, via its primary_email_address.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: salesforce_user_id
+        description: FK to the raw salesforce.user id, null for non-sales/ops staff without an SFDC seat.
+      - name: zendesk_user_id
+        description: FK to the raw zendesk.user id, null for staff who are not support agents.
+      - name: hubspot_owner_id
+        description: FK to the raw hubspot.owner id.
+      - name: greenhouse_user_id
+        description: FK to the raw greenhouse.user id, null for staff without Greenhouse access.

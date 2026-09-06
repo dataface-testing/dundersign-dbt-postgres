@@ -1,0 +1,119 @@
+version: 2
+
+models:
+  - name: email_campaigns
+    description: >
+      HubSpot email campaigns. Built directly on Fivetran hubspot_source
+      staging (stg_hubspot__email_campaign) -- no fan-out, no conformance
+      needed (single source system).
+    columns:
+      - name: id
+        tests: [unique, not_null]
+
+  - name: email_events
+    description: >
+      HubSpot email events (sent/open/click/bounce/etc), one row per event.
+      email_event carries no contact_id -- recipient is matched to persons
+      by lowercased email.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: email_campaign_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('email_campaigns')
+                field: id
+      - name: person_id
+        description: FK to persons.id, matched on lowercased email. Null only if the recipient was never a hubspot contact.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('persons')
+                field: id
+
+  - name: marketing_forms
+    description: HubSpot forms. Built directly on Fivetran hubspot_source staging (stg_hubspot__form).
+    columns:
+      - name: id
+        tests: [unique, not_null]
+
+  - name: form_submissions
+    description: >
+      HubSpot contact form submissions, one row per submission.
+      contact_id matches persons.hubspot_contact_id directly (bigint join).
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: marketing_form_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('marketing_forms')
+                field: id
+      - name: person_id
+        tests: [not_null]
+        description: FK to persons.id, matched via hubspot_contact_id.
+
+  - name: marketing_lists
+    description: >
+      HubSpot contact-list catalog (name/metadata), one row per list.
+      Deliberately split from marketing_list_memberships -- a list's
+      metadata and a person's membership in it are different grains.
+      (spec.md called this one entity, "marketing_lists"; a single table
+      isn't coherent across two grains, so it's split here.)
+    columns:
+      - name: id
+        tests: [unique, not_null]
+
+  - name: marketing_list_memberships
+    description: >
+      Bridge between marketing_lists and persons, one row per
+      contact-list-member link. contact_id matches persons.hubspot_contact_id
+      directly (bigint join).
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: marketing_list_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('marketing_lists')
+                field: id
+      - name: person_id
+        tests: [not_null]
+        description: FK to persons.id, matched via hubspot_contact_id.
+
+  - name: email_subscriptions
+    description: >
+      HubSpot email subscription-type catalog (a tiny reference table --
+      3 rows: Marketing, Product Updates, Weekly Digest).
+    columns:
+      - name: id
+        tests: [unique, not_null]
+
+  - name: email_subscription_changes
+    description: >
+      HubSpot email subscription change log, one row per change event.
+      Deviation from spec.md, which said this table needed no modeling --
+      true when written, but the raw table now holds thousands of rows (same
+      order of magnitude as the other populated marketing tables), so per the
+      Nimble acceptance criterion it earns its own entity here rather than
+      being silently skipped. recipient is a bare email string on this raw
+      table (no contact_id) -- person_id is matched by lowercased email.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: email_subscription_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('email_subscriptions')
+                field: id
+      - name: person_id
+        description: FK to persons.id, matched on lowercased email. Null only if the recipient was never a hubspot contact.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('persons')
+                field: id

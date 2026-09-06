@@ -1,0 +1,110 @@
+version: 2
+
+models:
+  - name: invoices
+    description: >
+      Conformed Stripe invoices. person_id/account_id resolve customer_id
+      against the persons/accounts spines -- see invoices.sql header for
+      the dedup and description-match rationale.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: person_id
+        description: FK to persons.id, resolved via this row's own stripe.customer email (see invoices.sql header) -- not via persons.primary_stripe_customer_id. Null only when the customer's email doesn't resolve to a person at all.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('persons')
+                field: id
+      - name: account_id
+        description: FK to accounts.id, resolved via stripe.customer.description matching accounts.name.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('accounts')
+                field: id
+      - name: subscription_id
+        description: FK to subscriptions.id, null for one-off invoices.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('subscriptions')
+                field: id
+
+  - name: invoice_line_items
+    description: Conformed Stripe invoice line items, one row per invoice_id/type combination.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: invoice_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('invoices')
+                field: id
+      - name: subscription_id
+        description: FK to subscriptions.id, null for non-subscription line items.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('subscriptions')
+                field: id
+
+  - name: charges
+    description: >
+      Conformed Stripe charges. person_id/account_id resolve the same way
+      as invoices -- see invoices.sql header.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: person_id
+        description: FK to persons.id, resolved via this row's own stripe.customer email (see invoices.sql header) -- not via persons.primary_stripe_customer_id. Null only when the customer's email doesn't resolve to a person at all.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('persons')
+                field: id
+      - name: account_id
+        description: FK to accounts.id, resolved via stripe.customer.description matching accounts.name.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('accounts')
+                field: id
+      - name: invoice_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('invoices')
+                field: id
+
+  - name: refunds
+    description: Conformed Stripe refunds -- thin in this fixture, but modeled for completeness.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: charge_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('charges')
+                field: id
+
+  - name: balance_transactions
+    description: >
+      Conformed Stripe balance transactions. `source` is polymorphic
+      (settles a charge or a refund) -- see balance_transactions.sql
+      header. charge_id is null for the rows that settle a refund
+      instead of a charge.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: charge_id
+        description: FK to charges.id, null when `source` settles a refund instead of a charge.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('charges')
+                field: id

@@ -1,0 +1,62 @@
+name: "dundersign"
+version: "1.0.0"
+config-version: 2
+
+profile: "dundersign"
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Stage → Canonical (silver) → Serving, per Nimble.
+#  - staging:  per-source 1:1 cleanup, materialized as views (cheap, recomputed on read).
+#  - core:     conformed canonical entities (silver layer); the tables boards query.
+#  - serving:  pre-aggregated rollups, declared exceptions for dashboard performance.
+models:
+  dundersign:
+    staging:
+      +materialized: view
+      +schema: staging
+    core:
+      +materialized: "{{ env_var('DUNDERSIGN_CORE_MATERIALIZATION', 'table') }}"
+    serving:
+      +materialized: "{{ env_var('DUNDERSIGN_SERVING_MATERIALIZATION', 'table') }}"
+      +schema: serving
+
+  # Vendored Fivetran source packages default their staging models to tables,
+  # which duplicates the raw layer inside the shipped fixture for no benefit --
+  # the repo fixture is a demo artifact under a hard 100 MiB git limit, not a
+  # production warehouse. Views cost a re-scan on read of tables this size.
+  hubspot_source:
+    +materialized: view
+  salesforce_source:
+    +materialized: view
+  stripe_source:
+    +materialized: view
+  zendesk_source:
+    +materialized: view
+
+# Source-schema vars so Fivetran quickstart packages (and our own product_db
+# source in _sources.yml) can be repointed at faketran's emitted schemas
+# without forking the packages themselves. The BigQuery publish pipeline
+# overrides these with `dbt build --vars` to prefix every raw dataset with the
+# company slug (dundersign_hubspot, not hubspot) — that project is a shared
+# warehouse across multiple fake companies, so an unprefixed connector-named
+# dataset would collide the moment a second company syncs the same connector.
+vars:
+  salesforce_schema: salesforce
+  stripe_schema: stripe
+  zendesk_schema: zendesk
+  hubspot_schema: hubspot
+  workday_schema: workday
+  product_db_schema: product_db
+  greenhouse_schema: greenhouse
+  netsuite_schema: netsuite
+  quickbooks_schema: quickbooks
