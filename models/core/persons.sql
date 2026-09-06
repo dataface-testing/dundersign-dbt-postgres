@@ -71,13 +71,17 @@ sales_contact as (
     where email is not null and email <> ''
 ),
 billing_customer as (
-    select
-        customer_id                               as primary_stripe_customer_id,
-        lower(trim(email))                        as email,
-        created_at
-    from {{ ref('stg_stripe__customer') }}
-    where email is not null and email <> '' and not is_deleted
-    qualify row_number() over (partition by lower(trim(email)) order by created_at) = 1
+    select primary_stripe_customer_id, email, created_at
+    from (
+        select
+            customer_id                               as primary_stripe_customer_id,
+            lower(trim(email))                        as email,
+            created_at,
+            row_number() over (partition by lower(trim(email)) order by created_at) as rn
+        from {{ ref('stg_stripe__customer') }}
+        where email is not null and email <> '' and not is_deleted
+    ) ranked
+    where rn = 1
 ),
 -- Structural completeness: every email any source holds, deduped.
 person_email as (

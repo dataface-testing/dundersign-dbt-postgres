@@ -8,9 +8,23 @@ serving models on top (`analytics_serving.daily_metrics`,
 `analytics_serving.monthly_metrics`).
 
 Connection comes from the environment: `DUNDERSIGN_PG_HOST`,
-`DUNDERSIGN_PG_USER`, `DUNDERSIGN_PG_PASSWORD` (see `profiles.yml`).
+`DUNDERSIGN_PG_USER`, `DUNDERSIGN_PG_PASSWORD`, and optionally
+`DUNDERSIGN_PG_PORT` and `DUNDERSIGN_PG_SSLMODE` (see `profiles.yml`).
 
 ```bash
 dbt deps
 dbt build
 ```
+
+## Roles
+
+- `dundersign_dbt` owns the raw and analytics schemas and runs dbt.
+- `dundersign_ro` is read-only over `analytics*`, for BI tools and dashboards.
+  `grant_readonly.sql` (run as `dundersign_dbt`) sets that up after a build.
+
+## Loading the raw schemas
+
+One-time, from the DuckDB export: `load_postgres.py` copies the nine raw
+schemas across unchanged so the sources in `models/` resolve as-is, then
+`fixups.sql` (run as `dundersign_dbt`) corrects the column types the export
+got wrong.

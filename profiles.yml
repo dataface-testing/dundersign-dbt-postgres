@@ -4,10 +4,10 @@ dundersign:
     prod:
       type: postgres
       host: "{{ env_var('DUNDERSIGN_PG_HOST') }}"
-      port: 5432
+      port: "{{ env_var('DUNDERSIGN_PG_PORT', '5432') | int }}"
       user: "{{ env_var('DUNDERSIGN_PG_USER', 'dundersign_dbt') }}"
       password: "{{ env_var('DUNDERSIGN_PG_PASSWORD') }}"
       dbname: dundersign
       schema: analytics
-      sslmode: require
+      sslmode: "{{ env_var('DUNDERSIGN_PG_SSLMODE', 'require') }}"
       threads: 4

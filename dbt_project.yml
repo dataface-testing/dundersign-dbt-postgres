@@ -51,6 +51,18 @@ models:
 # warehouse across multiple fake companies, so an unprefixed connector-named
 # dataset would collide the moment a second company syncs the same connector.
 vars:
+  # The Zendesk export has no schedule, tag, organization, brand or form tables;
+  # the package would stub them with integer ids that don't join to the text
+  # ticket/user ids.
+  using_schedules: false
+  using_user_tags: false
+  using_organizations: false
+  using_organization_tags: false
+  using_domain_names: false
+  using_brands: false
+  using_ticket_form_history: false
+  # ticket_field_history tracks only these two fields (no assignee history).
+  ticket_field_history_columns: [status, priority]
   salesforce_schema: salesforce
   stripe_schema: stripe
   zendesk_schema: zendesk

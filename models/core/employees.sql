@@ -19,26 +19,34 @@ with worker as (
     select * from {{ ref('worker_histories') }}
 ),
 person as (
-    select
-        personal_info_system_id,
-        first_name,
-        last_name
-    from {{ ref('person_names') }}
-    qualify row_number() over (
-        partition by personal_info_system_id
-        order by case when name_type = 'Legal' then 0 else 1 end, person_name_index
-    ) = 1
+    select personal_info_system_id, first_name, last_name
+    from (
+        select
+            personal_info_system_id,
+            first_name,
+            last_name,
+            row_number() over (
+                partition by personal_info_system_id
+                order by case when name_type = 'Legal' then 0 else 1 end, person_name_index
+            ) as rn
+        from {{ ref('person_names') }}
+    ) ranked
+    where rn = 1
 ),
 email as (
-    select
-        personal_info_system_id,
-        email_address,
-        email_code
-    from {{ ref('person_contact_email_addresses') }}
-    qualify row_number() over (
-        partition by personal_info_system_id
-        order by case when email_code = 'WORK' then 0 else 1 end, id
-    ) = 1
+    select personal_info_system_id, email_address, email_code
+    from (
+        select
+            personal_info_system_id,
+            email_address,
+            email_code,
+            row_number() over (
+                partition by personal_info_system_id
+                order by case when email_code = 'WORK' then 0 else 1 end, id
+            ) as rn
+        from {{ ref('person_contact_email_addresses') }}
+    ) ranked
+    where rn = 1
 ),
 position_history as (
     select

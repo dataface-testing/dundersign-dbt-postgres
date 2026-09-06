@@ -22,15 +22,17 @@ RAW_SCHEMAS = (
 duck = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser(
     "~/Fivetran/tmp/dundersign-9-5-26/dundersign.duckdb"
 )
-con = duckdb.connect(duck, read_only=True)
+con = duckdb.connect()
 con.execute("INSTALL postgres; LOAD postgres;")
+con.execute(f"ATTACH '{duck}' AS src (READ_ONLY)")
 con.execute(f"ATTACH '{os.environ['DUNDERSIGN_PG_DSN']}' AS pg (TYPE postgres)")
 for schema in RAW_SCHEMAS:
     con.execute(f"CREATE SCHEMA IF NOT EXISTS pg.{schema}")
     tables = con.execute(
-        "SELECT table_name FROM information_schema.tables WHERE table_schema = ?",
+        "SELECT table_name FROM information_schema.tables "
+        "WHERE table_catalog = 'src' AND table_schema = ?",
         [schema],
     ).fetchall()
     for (table,) in tables:
-        con.execute(f'CREATE OR REPLACE TABLE pg.{schema}."{table}" AS SELECT * FROM {schema}."{table}"')
+        con.execute(f'CREATE OR REPLACE TABLE pg.{schema}."{table}" AS SELECT * FROM src.{schema}."{table}"')
     print(f"{schema}: {len(tables)} tables")
