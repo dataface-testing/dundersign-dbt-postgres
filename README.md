@@ -51,3 +51,4 @@ export DUNDERSIGN_RO_PASSWORD="$(gcloud secrets versions access latest \
   --secret=dundersign-ro-db-password)"
 dct serve
 ```
+
