@@ -1,0 +1,19 @@
+# dbt charts project configuration for Dundersign.
+#
+# Boards read `analytics*` through the read-only `dundersign_ro` role.
+# Locally that goes over the Cloud SQL Auth Proxy unix socket (this machine
+# is not in the instance's IP allowlist); dbt charts Cloud reaches the same
+# database over its public IP via the mapped Cloud connection.
+#
+# The password is never stored here -- export DUNDERSIGN_RO_PASSWORD, e.g.
+#   export DUNDERSIGN_RO_PASSWORD="$(gcloud secrets versions access latest \
+#     --secret=dundersign-ro-db-password)"
+sources:
+  dundersign:
+    type: postgres
+    host: "{{ env_var('DUNDERSIGN_PG_HOST', '/tmp/dct-pgsock/internal-dataface-eng:us-west1:dataface-cloud-db') }}"
+    port: "{{ env_var('DUNDERSIGN_PG_PORT', '5432') | int }}"
+    dbname: dundersign
+    schema: analytics
+    user: "{{ env_var('DUNDERSIGN_PG_USER', 'dundersign_ro') }}"
+    password: "{{ env_var('DUNDERSIGN_RO_PASSWORD') }}"

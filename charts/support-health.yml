@@ -1,0 +1,155 @@
+title: "Dundersign — Support Health"
+notes: >
+  Support workload and responsiveness from the core ticket models. Built on analytics.tickets /
+  ticket_events / satisfaction_ratings rather than the Zendesk package's zendesk__ticket_metrics,
+  which is empty in this warehouse.
+
+queries:
+  support_headline:
+    notes: "Single row: open backlog, resolution rate, mean hours to first solve, and CSAT positive share."
+    sql: |
+      with solved as (
+        select
+          ev.ticket_id,
+          min(ev.valid_starting_at) as resolved_at
+        from analytics.ticket_events ev
+        where ev.field_name = 'status'
+          and ev.value in ('solved', 'closed')
+        group by 1
+      ),
+      resolution_stats as (
+        select avg(extract(epoch from (s.resolved_at - t.created_at)) / 3600.0) as avg_hours
+        from analytics.tickets t
+        join solved s on s.ticket_id = t.id
+      ),
+      ticket_counts as (
+        select
+          count(*) filter (where tk.status = 'new') as open_tickets,
+          count(*) filter (where tk.status in ('solved', 'closed'))::numeric
+            / nullif(count(*), 0) as resolution_rate
+        from analytics.tickets tk
+      ),
+      csat as (
+        select
+          count(*) filter (where sr.score = 'good')::numeric / nullif(count(*), 0) as good_share,
+          count(*) as ratings
+        from analytics.satisfaction_ratings sr
+      )
+      select
+        (select open_tickets from ticket_counts) as open_tickets,
+        (select resolution_rate from ticket_counts) as resolution_rate,
+        (select avg_hours from resolution_stats) as avg_resolution_hours,
+        (select good_share from csat) as csat_good_share,
+        (select ratings from csat) as csat_ratings
+
+  tickets_by_month:
+    notes: "Tickets created versus resolved each month, from the serving rollup — the backlog gap."
+    sql: |
+      select
+        month,
+        tickets_created,
+        tickets_resolved
+      from analytics_serving.monthly_metrics
+      order by month
+
+  backlog_grid:
+    notes: "Unresolved tickets by priority and inbound channel — where the untouched queue is concentrated."
+    sql: |
+      select
+        priority,
+        via_channel,
+        count(*) as open_tickets
+      from analytics.tickets
+      where status = 'new'
+      group by 1, 2
+      order by 1, 2
+
+  tickets_by_type:
+    notes: "Ticket volume split by type, with the resolved share of each."
+    sql: |
+      select
+        ticket_type,
+        count(*) as tickets,
+        count(*) filter (where status in ('solved', 'closed')) as resolved
+      from analytics.tickets
+      group by 1
+      order by tickets desc
+
+charts:
+  kpi_open_tickets:
+    query: support_headline
+    type: kpi
+    notes: "Tickets still sitting in the new state."
+    value: open_tickets
+    label: "Open tickets"
+    style:
+      value:
+        format: integer
+
+  kpi_resolution_rate:
+    query: support_headline
+    type: kpi
+    notes: "Share of all tickets ever raised that reached solved or closed."
+    value: resolution_rate
+    label: "Resolution rate"
+    style:
+      value:
+        format: percent
+
+  kpi_resolution_hours:
+    query: support_headline
+    type: kpi
+    notes: "Mean calendar hours from ticket creation to the first solved status event."
+    value: avg_resolution_hours
+    label: "Avg hours to resolve"
+    style:
+      value:
+        format: number_full
+
+  kpi_csat:
+    query: support_headline
+    type: kpi
+    notes: "Share of satisfaction ratings that were good; the rating count is the support line because the sample is thin."
+    value: csat_good_share
+    label: "CSAT positive"
+    style:
+      value:
+        format: percent
+    support:
+      value: csat_ratings
+      label: "ratings collected"
+      format: integer
+
+  ticket_flow:
+    query: tickets_by_month
+    type: line
+    title: "Tickets created vs resolved"
+    notes: "Is support keeping up with inbound volume?"
+    x: month
+    y: [tickets_created, tickets_resolved]
+    style:
+      number_format: integer
+
+  type_mix:
+    query: tickets_by_type
+    type: bar
+    title: "Tickets by type"
+    notes: "What people actually write in about, and how much of each type is closed out."
+    x: ticket_type
+    y: [tickets, resolved]
+    style:
+      number_format: integer
+
+  backlog_heatmap:
+    query: backlog_grid
+    type: heatmap
+    title: "Open backlog by priority and channel"
+    notes: "Which priority/channel cells hold the untouched queue."
+    x: via_channel
+    y: priority
+    color: open_tickets
+
+rows:
+  - cols: [kpi_open_tickets, kpi_resolution_rate, kpi_resolution_hours, kpi_csat]
+  - ticket_flow
+  - cols: [backlog_heatmap, type_mix]

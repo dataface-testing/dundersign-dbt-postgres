@@ -1,0 +1,198 @@
+title: "Dundersign — Sales Pipeline"
+notes: "Salesforce pipeline health: open pipeline by stage, closed-won trend, win rate by source, and rep leaderboard."
+
+variables:
+  min_close_month:
+    notes: "Earliest close month included in the closed-won trend and win-rate splits."
+    input: date
+    default: "2025-09-01"
+
+queries:
+  pipeline_headline:
+    notes: "Single row summarising open pipeline value, its probability-weighted value, and trailing win rate on closed deals."
+    sql: |
+      select
+        sum(amount) filter (where not is_closed) as open_pipeline,
+        sum(amount * probability / 100.0) filter (where not is_closed) as weighted_pipeline,
+        count(*) filter (where not is_closed) as open_deals,
+        count(*) filter (where is_won)::numeric
+          / nullif(count(*) filter (where is_closed), 0) as win_rate
+      from analytics.opportunities
+      where not is_deleted
+
+  open_by_stage:
+    notes: "Open opportunity value per stage, alongside the probability-weighted value of the same deals."
+    sql: |
+      select
+        stage_name,
+        sum(amount) as amount,
+        sum(amount * probability / 100.0) as weighted_amount,
+        min(case stage_name
+              when 'Prospecting'    then 1
+              when 'Qualification'  then 2
+              when 'Needs Analysis' then 3
+              when 'Proposal'       then 4
+              when 'Negotiation'    then 5
+              else 9
+            end) as stage_order
+      from analytics.opportunities
+      where not is_closed
+        and not is_deleted
+      group by 1
+      order by stage_order
+
+  closed_by_month:
+    notes: "Closed-won amount and lost deal count per close month, for the trend of what actually lands."
+    sql: |
+      select
+        date_trunc('month', close_at)::date as close_month,
+        sum(amount) filter (where is_won) as won_amount,
+        count(*) filter (where is_won) as won_deals,
+        count(*) filter (where not is_won) as lost_deals
+      from analytics.opportunities
+      where is_closed
+        and not is_deleted
+        and close_at >= '{{ min_close_month }}'
+      group by 1
+      order by 1
+
+  win_rate_by_source:
+    notes: "Win rate on closed deals per lead source — which channels convert, not just which produce volume."
+    sql: |
+      select
+        lead_source,
+        count(*) filter (where is_won)::numeric
+          / nullif(count(*), 0) as win_rate,
+        count(*) as closed_deals
+      from analytics.opportunities
+      where is_closed
+        and not is_deleted
+        and close_at >= '{{ min_close_month }}'
+      group by 1
+      order by win_rate desc
+
+  rep_leaderboard:
+    notes: "Per-owner closed-won amount, deal count and win rate — the rep leaderboard."
+    sql: |
+      select
+        owner_name,
+        sum(amount) filter (where is_won) as won_amount,
+        count(*) filter (where is_won) as won_deals,
+        count(*) filter (where is_won)::numeric
+          / nullif(count(*) filter (where is_closed), 0) as win_rate
+      from analytics.opportunities
+      where not is_deleted
+        and owner_name is not null
+      group by 1
+      having count(*) filter (where is_closed) > 0
+      order by won_amount desc nulls last
+      limit 10
+
+charts:
+  kpi_open_pipeline:
+    query: pipeline_headline
+    type: kpi
+    notes: "Total value of opportunities still open."
+    value: open_pipeline
+    label: "Open pipeline"
+    style:
+      value:
+        format: currency_whole
+    support:
+      value: open_deals
+      label: "open deals"
+      format: integer
+
+  kpi_weighted_pipeline:
+    query: pipeline_headline
+    type: kpi
+    notes: "Open pipeline discounted by each deal's stage probability."
+    value: weighted_pipeline
+    label: "Weighted pipeline"
+    style:
+      value:
+        format: currency_whole
+
+  kpi_win_rate:
+    query: pipeline_headline
+    type: kpi
+    notes: "Share of all closed opportunities that were won."
+    value: win_rate
+    label: "Win rate"
+    style:
+      value:
+        format: percent
+
+  pipeline_by_stage:
+    query: open_by_stage
+    type: bar
+    title: "Open pipeline by stage"
+    notes: "Where the open money sits, raw versus probability-weighted."
+    x: stage_name
+    y: [amount, weighted_amount]
+    sort:
+      by: stage_order
+      order: desc
+    style:
+      number_format: currency_whole
+
+  won_amount_trend:
+    query: closed_by_month
+    type: bar
+    title: "Closed-won by month"
+    notes: "Bookings actually landed each month."
+    x: close_month
+    y: won_amount
+    style:
+      orientation: vertical
+      number_format: currency_whole
+
+  outcome_counts:
+    query: closed_by_month
+    type: bar
+    title: "Deals won vs lost by month"
+    notes: "Deal-count outcome mix, which the amount trend alone hides."
+    x: close_month
+    y: [won_deals, lost_deals]
+    style:
+      orientation: vertical
+      stack: none
+      number_format: integer
+
+  source_win_rate:
+    query: win_rate_by_source
+    type: bar
+    title: "Win rate by lead source"
+    notes: "Which acquisition channels produce deals that close."
+    x: lead_source
+    y: win_rate
+    style:
+      number_format: percent
+
+  rep_table:
+    query: rep_leaderboard
+    type: table
+    title: "Rep leaderboard"
+    notes: "Top ten owners by closed-won amount, with their win rate."
+    style:
+      columns:
+        owner_name:
+          label: Rep
+        won_amount:
+          label: Won
+          format: currency_whole
+          align: right
+        won_deals:
+          label: Deals
+          format: integer
+          align: right
+        win_rate:
+          label: "Win rate"
+          format: percent
+          align: right
+
+rows:
+  - cols: [kpi_open_pipeline, kpi_weighted_pipeline, kpi_win_rate]
+  - cols: [pipeline_by_stage, won_amount_trend]
+  - cols: [outcome_counts, source_win_rate]
+  - rep_table

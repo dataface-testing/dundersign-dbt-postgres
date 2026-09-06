@@ -1,0 +1,187 @@
+title: "Dundersign — Company Overview"
+notes: "Executive rollup of growth, product usage and revenue, built on the analytics_serving pre-aggregated models."
+
+variables:
+  trailing_days:
+    notes: "Length of the daily trend window, counted back from the last day present in the data."
+    input: select
+    options:
+      static: [30, 60, 90, 180]
+    default: 90
+
+queries:
+  headline:
+    notes: "Single row: the most recent month's revenue, active users and document completion, each against the month before."
+    sql: |
+      with ranked as (
+        select *, row_number() over (order by month desc) as rn
+        from analytics_serving.monthly_metrics
+      )
+      select
+        max(revenue) filter (where rn = 1) as revenue,
+        max(revenue) filter (where rn = 1)
+          / nullif(max(revenue) filter (where rn = 2), 0) - 1 as revenue_change,
+        max(active_users) filter (where rn = 1) as active_users,
+        max(active_users) filter (where rn = 1)::numeric
+          / nullif(max(active_users) filter (where rn = 2), 0) - 1 as active_users_change,
+        max(documents_completed) filter (where rn = 1) as documents_completed,
+        max(documents_completed) filter (where rn = 1)
+          / nullif(max(documents_created) filter (where rn = 1), 0) as completion_rate
+      from ranked
+
+  monthly:
+    notes: "One row per month from the serving rollup: signups, active users, document volume and revenue."
+    sql: |
+      select
+        month,
+        new_users,
+        active_users,
+        sessions,
+        documents_created,
+        documents_completed,
+        revenue
+      from analytics_serving.monthly_metrics
+      order by month
+
+  daily_activity:
+    notes: "Sessions and distinct active users per day over the trailing window, ending at the last day in the data."
+    sql: |
+      select
+        date,
+        sessions,
+        active_users
+      from analytics_serving.daily_metrics
+      where date > (select max(date) from analytics_serving.daily_metrics)
+                   - interval '{{ trailing_days }} days'
+      order by date
+
+  signups_by_source:
+    notes: "Non-junk signups per month split by acquisition source, for the channel mix over time."
+    sql: |
+      select
+        date_trunc('month', created_at)::date as month,
+        signup_source,
+        count(*) as signups
+      from analytics.users
+      where not is_junk
+      group by 1, 2
+      order by 1, 2
+
+  plan_mix:
+    notes: "Current distribution of non-junk users across plans — how much of the base is on a paid plan."
+    sql: |
+      select plan, count(*) as users
+      from analytics.users
+      where not is_junk
+      group by 1
+      order by users desc
+
+charts:
+  kpi_revenue:
+    query: headline
+    type: kpi
+    notes: "Latest complete month of recognized revenue and its month-over-month move."
+    value: revenue
+    label: "Revenue, latest month"
+    style:
+      value:
+        format: currency_whole
+    support:
+      value: revenue_change
+      label: "vs prior month"
+      format: percent_delta
+
+  kpi_active_users:
+    query: headline
+    type: kpi
+    notes: "Distinct users with a session in the latest month."
+    value: active_users
+    label: "Active users"
+    style:
+      value:
+        format: integer
+    support:
+      value: active_users_change
+      label: "vs prior month"
+      format: percent_delta
+
+  kpi_documents_completed:
+    query: headline
+    type: kpi
+    notes: "Documents that reached completed status in the latest month."
+    value: documents_completed
+    label: "Documents completed"
+    style:
+      value:
+        format: integer
+
+  kpi_completion_rate:
+    query: headline
+    type: kpi
+    notes: "Share of the latest month's created documents that completed — the core product funnel."
+    value: completion_rate
+    label: "Completion rate"
+    style:
+      value:
+        format: percent
+
+  revenue_trend:
+    query: monthly
+    type: line
+    title: "Revenue by month"
+    notes: "Does monthly recognized revenue keep climbing?"
+    x: month
+    y: revenue
+    style:
+      number_format: currency_whole
+
+  document_volume:
+    query: monthly
+    type: line
+    title: "Documents created vs completed"
+    notes: "Volume through the product each month, and how much of it finishes."
+    x: month
+    y: [documents_created, documents_completed]
+    style:
+      number_format: integer
+
+  daily_sessions:
+    query: daily_activity
+    type: area
+    title: "Daily sessions"
+    subtitle: "Trailing window"
+    notes: "Day-level engagement rhythm, for spotting dips the monthly rollup hides."
+    x: date
+    y: sessions
+    height: 260
+    style:
+      number_format: integer
+
+  signup_mix:
+    query: signups_by_source
+    type: bar
+    title: "Signups by acquisition source"
+    notes: "Which channels bring users, and how the mix shifts month to month."
+    x: month
+    y: signups
+    color: signup_source
+    style:
+      orientation: vertical
+      stack: zero
+      number_format: integer
+
+  plan_distribution:
+    query: plan_mix
+    type: bar
+    title: "Users by plan"
+    notes: "How the installed base splits across trial, paid and lapsed plans."
+    x: plan
+    y: users
+    style:
+      number_format: integer
+
+rows:
+  - cols: [kpi_revenue, kpi_active_users, kpi_documents_completed, kpi_completion_rate]
+  - cols: [revenue_trend, document_volume]
+  - daily_sessions
+  - cols: [signup_mix, plan_distribution]
