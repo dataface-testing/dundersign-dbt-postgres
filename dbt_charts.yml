@@ -42,3 +42,15 @@
 #   # target: dev
 
 published_to: "https://dbtcharts.com/r2-04/dundersign-dbt-postgres/"
+
+# The warehouse every board reads from. Locally this resolves through the
+# repo's own profiles.yml (profile `dundersign`, target `prod`), so the
+# credential stays in the environment and never lands in git. On Cloud the
+# credential comes from whatever warehouse connection this name is mapped to
+# (`dct cloud source map analytics <connection>`); Cloud ignores the fields
+# below.
+sources:
+  analytics:
+    type: dbt_profile
+    profile: dundersign
+    target: prod
